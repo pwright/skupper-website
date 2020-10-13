@@ -1,3 +1,3 @@
 ---
-sh: replace '---.*---' skupper.didact.md
+sh: replace 'the' ' ' . --recursive --include *.md
 ---

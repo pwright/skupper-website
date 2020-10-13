@@ -57,5 +57,5 @@ update-%:
 
 .PHONY: didact
 didact:
-	cp input/start/index.md skupper.didact.md
-	hygen didact readme
+	cp input/start/index.md skupper-didact.md
+	HYGEN_OVERWRITE=1 hygen didact readme
