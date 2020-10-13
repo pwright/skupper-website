@@ -3,6 +3,8 @@ inject: true
 to: skupper-didact.md
 after: Prerequisites
 ---
-[Check if the kubectl command line is available](didact://?commandId=vscode.didact.cliCommandSuccessful&text=kubectl-requirements-status$$kubectl "Tests to see if `kubectl` returns a result"){.didact}
+<% cmd = '<%= cmd %>' %>
 
-*Status: unknown*{#kubectl-requirements-status}
+[Check if the <%= cmd %> command line is available](didact://?commandId=vscode.didact.cliCommandSuccessful&text=<%= cmd %>-requirements-status$$<%= cmd %> "Tests to see if `<%= cmd %>` returns a result"){.didact}
+
+*Status: unknown*{#<%= cmd %>-requirements-status}

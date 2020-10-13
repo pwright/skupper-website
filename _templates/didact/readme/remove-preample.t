@@ -1,3 +1,3 @@
 ---
-sh: replace 'the' ' ' . --recursive --include *.md
+sh: replace '' ' ' . --recursive --include *.md
 ---
