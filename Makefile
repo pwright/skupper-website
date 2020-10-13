@@ -53,3 +53,9 @@ update-transom:
 .PHONY: update-%
 update-%:
 	curl -sfo python/$*.py "https://raw.githubusercontent.com/ssorj/$*/master/python/$*.py"
+
+
+.PHONY: didact
+didact:
+	cp input/start/index.md skupper.didact.md
+	hygen didact readme
