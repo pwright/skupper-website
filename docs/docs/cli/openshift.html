@@ -155,12 +155,42 @@ It allows geographically distributed services to connect as if they were all run
 <div class="paragraph system:abstract">
 <p>Installing the <code>skupper</code> command-line interface (CLI) provides a simple method to get started with Skupper.</p>
 </div>
-<div class="paragraph">
-<div class="title">Procedure</div>
-<p>Unresolved directive in index.adoc - include::{common}fragment-skupper-install-steps.adoc[]</p>
-</div>
 <div class="olist arabic">
+<div class="title">Procedure</div>
 <ol class="arabic">
+<li>
+<p>Install the <code>skupper</code> command-line interface.</p>
+<div class="openblock">
+<div class="content">
+<div class="paragraph">
+<p>For Linux:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ curl -fL https://github.com/skupperproject/skupper/releases/download/0.8.6/skupper-cli-0.8.6-linux-amd64.tgz | tar -xzf -</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For MacOS:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>$ curl -fL https://github.com/skupperproject/skupper/releases/download/0.8.6/skupper-cli-0.8.6-mac-amd64.tgz | tar -xzf -</pre>
+</div>
+</div>
+</div>
+</div>
+</li>
+<li>
+<p>Copy the <code>skupper</code> executable to a directory in your $PATH:</p>
+<div class="listingblock">
+<div class="content">
+<pre>$ mkdir -p $HOME/bin
+$ export PATH=$PATH:$HOME/bin
+$ mv skupper $HOME/bin</pre>
+</div>
+</div>
+</li>
 <li>
 <p>Verify the installation.</p>
 <div class="listingblock">
@@ -247,10 +277,6 @@ In OpenShift 4.6 and later, you can use the web terminal to perform the followin
 <p>This session is referred to later as the <em>west</em> terminal session.</p>
 </div>
 </li>
-</ol>
-</div>
-<div class="olist arabic">
-<ol class="arabic" start="2">
 <li>
 <p>Start a terminal session to work on the <code>east</code> namespace and set the <code>KUBECONFIG</code> environment variable:</p>
 <div class="listingblock">

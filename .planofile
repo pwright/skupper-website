@@ -42,6 +42,8 @@ def generate_docs(app, owner="skupperproject", branch="main", output_dir="input/
         copy("build/skupper/latest/cli", output_dir)
         copy("build/skupper/latest/console", output_dir)
         copy("build/skupper/latest/declarative", output_dir)
+        copy("build/skupper/latest/policy", output_dir)
+        
 
 @command
 def test(app):

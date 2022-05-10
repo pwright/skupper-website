@@ -46,6 +46,42 @@ extra_headers: <link rel="stylesheet" href="index.css" type="text/css" async="as
   </div>
 </div>
 
+<div class="columns">
+ <div>
+  <h2>Policies</h2>
+
+  <p>By default, Skupper includes many security features, but Skupper policies
+  allow you granular control over connectivity</p>
+
+  <nav>
+    <a href="policy/index.html">Securing a service network</a>
+  </nav>
+</div>
+
+   <div>
+    <h2>Policies</h2>
+
+    <p>By default, Skupper includes many security features, but Skupper policies
+    allow you granular control over connectivity</p>
+
+    <nav>
+      <a href="policy/index.html">Securing a service network</a>
+    </nav>
+  </div>
+
+   <div>
+    <h2>Policies</h2>
+
+    <p>By default, Skupper includes many security features, but Skupper policies
+    allow you granular control over connectivity</p>
+
+    <nav>
+      <a href="policy/index.html">Securing a service network</a>
+    </nav>
+  </div>
+
+</div>
+
 <div>
   <h2>Blog posts, articles, and videos</h2>
 
