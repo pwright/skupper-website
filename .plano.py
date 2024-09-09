@@ -17,6 +17,7 @@
 # under the License.
 #
 
+import sys
 from transom.planocommands import *
 
 @command
@@ -29,10 +30,16 @@ def generate_docs(output_dir="input", owner="skupperproject", branch="main"):
     print("Follow the instructions in README.")
 
 
+import os
+import requests
+import yaml
+from pathlib import Path
+
 @command
 def generate_examples(output_dir="input"):
     """
     Generate the example index using data from GitHub and config/examples.yaml
+    Also, fetch README.md from each repo and save it as <example-name>.md
     """
 
     output_file = f"{output_dir}/examples/index.md"
@@ -40,6 +47,10 @@ def generate_examples(output_dir="input"):
     github_data = http_get_json("https://api.github.com/orgs/skupperproject/repos?per_page=100")
     repos = dict()
 
+    # Create output directory if it doesn't exist
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    # Build repo dictionary
     for repo_data in github_data:
         repos[repo_data["name"]] = repo_data
 
@@ -66,13 +77,26 @@ def generate_examples(output_dir="input"):
 
             try:
                 repo_data = repos[name]
-            except:
-                description = example_data.get("description").strip()
-                url = example_data.get("url")
+                # Fetch README.md from the repo
+                readme_url = f"https://raw.githubusercontent.com/skupperproject/{name}/main/README.md"
+                readme_response = requests.get(readme_url)
+                readme_response.raise_for_status()  # Raise error for invalid requests
+                readme_content = readme_response.text
+
+                # Save README.md content to <example-name>.md
+                readme_file = f"{output_dir}/{name}.md"
+                with open(readme_file, "w") as f:
+                    f.write(readme_content)
+
+            except Exception as e:
+                print(f"Error fetching README for {name}: {str(e)}", file=sys.stderr)
+                description = example_data.get("description", "No description available").strip()
+                url = example_data.get("url", "#")
             else:
                 description = example_data.get("description", repo_data["description"])
                 url = example_data.get("url", repo_data["html_url"])
 
+            # Build the output HTML structure
             out.append("<div>")
             out.append(f"<h3><a href=\"{url}\">{title}</a></h3>")
             out.append(f"<p>{description}</p>")
@@ -93,6 +117,24 @@ def generate_examples(output_dir="input"):
     markdown = read("config/examples.md.in").replace("@examples@", examples)
 
     write(output_file, markdown)
+
+
+def read_yaml(file_path):
+    with open(file_path, "r") as f:
+        return yaml.safe_load(f)
+
+def http_get_json(url):
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()
+
+def read(file_path):
+    with open(file_path, "r") as f:
+        return f.read()
+
+def write(file_path, content):
+    with open(file_path, "w") as f:
+        f.write(content)
 
 @command
 def generate_releases(output_dir="input"):
