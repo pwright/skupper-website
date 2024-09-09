@@ -1,0 +1,78 @@
+title: Skupper Hello World private to private
+subtitle: Connect services in isolated on-prem sites
+overview: |
+  This example is a basic multi-service HTTP application deployed
+  across two Kubernetes clusters, each in its own private data center.
+
+  It contains two services:
+
+  * A backend service that exposes an `/api/hello` endpoint.  It
+    returns greetings of the form `Hi, <your-name>.  I am <my-name>
+    (<pod>)`.
+
+  * A frontend service that connects to the backend.  It sends
+    greetings to the backend and fetches new greetings in response.
+
+  The backend service runs in on-prem cluster "private1", and the
+  frontend service runs in on-prem cluster "private2".  The private
+  sites are linked by a relay site in the public cloud.  Skupper
+  enables the frontend to connect to the backend over a secure
+  dedicated application network.
+
+  <img src="images/entities.svg" style="max-width: 100%;"/>
+sites:
+  private1:
+    title: Private 1
+    platform: kubernetes
+    namespace: private1
+    env:
+      KUBECONFIG: ~/.kube/config-private1
+  private2:
+    title: Private 2
+    platform: kubernetes
+    namespace: private2
+    env:
+      KUBECONFIG: ~/.kube/config-private2
+  relay:
+    title: Relay
+    platform: kubernetes
+    namespace: relay
+    env:
+      KUBECONFIG: ~/.kube/config-relay
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - standard: hello_world/deploy_the_frontend_and_backend
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+    commands:
+      relay:
+        - run: skupper token create ~/relay1.token
+          output: |
+            Token written to ~/relay1.token
+        - run: skupper token create ~/relay2.token
+          output: |
+            Token written to ~/relay2.token
+      private1:
+        - run: skupper link create ~/relay1.token
+          output: |
+            Site configured to link to https://10.106.89.17:8081/76f8f557-ccd2-11ee-865d-04421a4c5042 (name=link1)
+            Check the status of the link using 'skupper link status'.
+      private2:
+        - run: skupper link create ~/relay2.token
+          output: |
+            Site configured to link to https://10.106.89.17:8081/775fb7d6-ccd2-11ee-aab9-04421a4c5042 (name=link1)
+            Check the status of the link using 'skupper link status'.
+  - standard: hello_world/expose_the_backend
+  - standard: hello_world/access_the_frontend
+  - standard: hello_world/cleaning_up
+    commands:
+      private1:
+        - run: skupper delete
+        - run: kubectl delete service/frontend
+        - run: kubectl delete deployment/frontend
+      private2:
+        - run: skupper delete
+        - run: kubectl delete deployment/backend
+      relay:
+        - run: skupper delete

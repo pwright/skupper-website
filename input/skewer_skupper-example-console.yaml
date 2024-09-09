@@ -1,0 +1,109 @@
+title: Skupper Hello World using the console
+subtitle: Explore an application network using the Skupper web console
+overview: |
+  The Skupper web console provides a graphical view of a Skupper
+  network.  This example shows you how to set it up.  It uses the
+  Skupper Hello World as an example application.
+
+  The Hello World application contains two components:
+
+  * A backend service that exposes an `/api/hello` endpoint.  It
+    returns greetings of the form `Hi, <your-name>.  I am <my-name>
+    (<pod-name>)`.
+
+  * A frontend service that sends greetings to the backend and
+    fetches new greetings in response.
+
+  These two components run on two distinct Kubernetes clusters (two
+  _sites_).  With the Skupper console, you can observe the two sites
+  and the two components and see the metrics for their communication.
+sites:
+  west:
+    title: West
+    platform: kubernetes
+    namespace: west
+    env:
+      KUBECONFIG: ~/.kube/config-west
+  east:
+    title: East
+    platform: kubernetes
+    namespace: east
+    env:
+      KUBECONFIG: ~/.kube/config-east
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - standard: hello_world/deploy_the_frontend_and_backend
+  - title: Create your sites
+    preamble: |
+      A Skupper _site_ is a location where components of your
+      application are running.  Sites are linked together to form a
+      network for your application.  In Kubernetes, a site is associated
+      with a namespace.
+
+      In West, use `skupper init` with the `--enable-console` and
+      `--enable-flow-collector` options.  These options make the
+      console available from West.
+
+      In East, use `skupper init` again, this time without the extra
+      options.
+
+      After each `skupper init` operation, run `skupper status` to see
+      the outcome.
+
+      **Note:** If you are using Minikube, you need to [start minikube
+      tunnel][minikube-tunnel] before you run `skupper init`.
+
+      [minikube-tunnel]: https://skupper.io/start/minikube.html#running-minikube-tunnel
+    commands:
+      west:
+        - run: skupper init --enable-console --enable-flow-collector
+          output: |
+            Waiting for LoadBalancer IP or hostname...
+            Waiting for status...
+            Skupper is now installed in namespace 'west'.  Use 'skupper status' to get more information.
+        - run: skupper status
+          output: |
+            Skupper is enabled for namespace "west". It is not connected to any other sites. It has no exposed services.
+      east:
+        - run: skupper init
+          output: |
+            Waiting for LoadBalancer IP or hostname...
+            Waiting for status...
+            Skupper is now installed in namespace 'east'.  Use 'skupper status' to get more information.
+        - run: skupper status
+          output: |
+            Skupper is enabled for namespace "east". It is not connected to any other sites. It has no exposed services.
+    postamble: |
+      As you move through the steps below, you can use `skupper status` at
+      any time to check your progress.
+  - standard: link_your_sites
+  - standard: hello_world/expose_the_backend
+  - title: Access the web console
+    preamble: |
+      Now we're ready to try the console.  To access it, use `skupper
+      status` to look up the URL of the console.  Then use `kubectl
+      get secret/skupper-console-users` to look up the console admin
+      password.
+
+      **Note:** The `<console-url>` and `<password>` fields in the
+      following output are placeholders.  The actual values are specific
+      to your environment.
+    commands:
+      west:
+        - run: skupper status
+          apply: readme
+          output: |
+            Skupper is enabled for namespace "west" in interior mode. It is connected to 1 other site. It has 1 exposed service.
+            The site console url is: <console-url>
+            The credentials for internal console-auth mode are held in secret: 'skupper-console-users'
+        - run: kubectl get secret/skupper-console-users -o jsonpath={.data.admin} | base64 -d
+          apply: readme
+          output: <password>
+        - await_ingress: service/skupper
+        - run: curl --fail --insecure --verbose --retry 60 --retry-connrefused --retry-delay 2 $(kubectl get service/skupper -o jsonpath='https://{.status.loadBalancer.ingress[0].ip}:8010/') --user admin:$(kubectl get secret/skupper-console-users -o jsonpath={.data.admin} | base64 -d); echo
+          apply: test
+    postamble: |
+      Navigate to `<console-url>` in your browser.  When prompted, log
+      in as user `admin` and enter the password.
+  - standard: hello_world/cleaning_up

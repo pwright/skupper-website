@@ -1,0 +1,140 @@
+title: Skupper Hello World using Podman
+subtitle: Connect services running as Podman containers
+workflow: null
+overview: |
+  This example is a basic multi-service HTTP application deployed
+  across a Kubernetes cluster and a bare-metal host or VM running
+  Podman containers.
+
+  It contains two services:
+
+  * A backend service that exposes an `/api/hello` endpoint.  It
+    returns greetings of the form `Hi, <your-name>.  I am <my-name>
+    (<container>)`.
+
+  * A frontend service that sends greetings to the backend and
+    fetches new greetings in response.
+
+  With Skupper, you can run the backend as a container on your local
+  machine and the frontend in Kubernetes and maintain connectivity
+  between the two services without exposing the backend to the public
+  internet.
+
+  <!-- <img src="images/entities.svg" width="640"/> -->
+prerequisites: |
+  * A working installation of Podman ([installation
+    guide][install-podman])
+
+  * The `kubectl` command-line tool, version 1.15 or later
+    ([installation guide][install-kubectl])
+
+  * Access to a Kubernetes cluster, from [any provider you
+    choose][kube-providers]
+
+  [install-podman]: https://podman.io/getting-started/installation
+  [install-kubectl]: https://kubernetes.io/docs/tasks/tools/install-kubectl/
+  [kube-providers]: https://skupper.io/start/kubernetes.html
+sites:
+  kubernetes:
+    title: Kubernetes
+    platform: kubernetes
+    namespace: hello-world
+    env:
+      KUBECONFIG: ~/.kube/config-hello-world
+  podman:
+    title: Podman
+    platform: podman
+    env:
+      SKUPPER_PLATFORM: podman
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_kubernetes_namespace
+  - standard: podman/set_up_your_podman_network
+  - title: Deploy the frontend and backend
+    preamble: |
+      This example runs the frontend in Kubernetes and the backend as
+      a local Podman container.
+
+      In Kubernetes, use `kubectl create deployment` to deploy the
+      frontend service in namespace `hello-world`.
+
+      In Podman, use `podman run` to start the backend service on your
+      local machine.
+
+      **Note:** It is important to name your running container using
+      `--name` to avoid a collision with the container that Skupper
+      creates for accessing the service.
+
+      **Note:** You must use `--network skupper` with the `podman run`
+      command.
+    commands:
+      kubernetes:
+        - run: kubectl create deployment frontend --image quay.io/skupper/hello-world-frontend
+      podman:
+        - run: podman run --name backend-target --network skupper --detach --rm -p 8080:8080 quay.io/skupper/hello-world-backend
+  - title: Create your sites
+    preamble: |
+      A Skupper _site_ is a location where components of your
+      application are running.  Sites are linked together to form a
+      Skupper network for your application.
+
+      In Kubernetes, use `skupper init` to create a site.  This
+      deploys the Skupper router and controller.  Then use `skupper
+      status` to see the outcome.
+
+      In Podman, use `skupper init` with the option `--ingress none`
+      and use `skupper status` to see the result.
+
+      **Note:** If you are using Minikube, you need to [start minikube
+      tunnel][minikube-tunnel] before you run `skupper init`.
+
+      [minikube-tunnel]: https://skupper.io/start/minikube.html#running-minikube-tunnel
+    commands:
+      kubernetes:
+        - run: skupper init
+          output: |
+            Waiting for LoadBalancer IP or hostname...
+            Waiting for status...
+            Skupper is now installed in namespace 'hello-world'.  Use 'skupper status' to get more information.
+      podman:
+        - run: skupper init --ingress none
+          output: |
+            It is recommended to enable lingering for jross, otherwise Skupper may not start on boot.
+            Skupper is now installed for user 'jross'.  Use 'skupper status' to get more information.
+    postamble: |
+      As you move through the steps below, you can use `skupper status` at
+      any time to check your progress.
+  - standard: link_your_sites
+  - title: Expose the backend
+    preamble: |
+      We now have our sites linked to form a Skupper network, but no
+      services are exposed on it.  We can use the `skupper service`
+      commands to expose the backend service in Podman to the frontend
+      in Kubernetes.
+
+      In Kubernetes, use `skupper service create` to create a service
+      called `backend`.
+
+      In Podman, use `skupper service create` to create the same
+      service.  Use `skupper service bind` to attach your running
+      backend process as a target for the service.
+
+      **Note:** Podman sites do not automatically replicate services
+      to remote sites.  You need to use `skupper service create` on
+      each site where you wish to make a service available.
+    commands:
+      kubernetes:
+        - run: skupper service create backend 8080
+      podman:
+        - run: skupper service create backend 8080
+        - run: skupper service bind backend host backend-target --target-port 8080
+  - standard: hello_world/access_the_frontend
+  - standard: cleaning_up
+    commands:
+      kubernetes:
+        - run: skupper delete
+        - run: kubectl delete service/frontend
+        - run: kubectl delete deployment/frontend
+      podman:
+        - run: skupper delete
+        - run: podman stop backend-target

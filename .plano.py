@@ -77,17 +77,35 @@ def generate_examples(output_dir="input"):
 
             try:
                 repo_data = repos[name]
+
                 # Fetch README.md from the repo
                 readme_url = f"https://raw.githubusercontent.com/skupperproject/{name}/main/README.md"
                 readme_response = requests.get(readme_url)
-                readme_response.raise_for_status()  # Raise error for invalid requests
-                readme_content = readme_response.text
 
-                # Save README.md content to <example-name>.md
-                readme_file = f"{output_dir}/{name}.md"
-                with open(readme_file, "w") as f:
-                    f.write(readme_content)
+                if readme_response.status_code == 200:
+                    readme_content = readme_response.text
+                    # Save README.md content to <example-name>.md
+                    readme_file = f"{output_dir}/{name}.md"
+                    with open(readme_file, "w") as f:
+                        f.write(readme_content)
+                else:
+                    print(f"README.md not found for {name}", file=sys.stderr)
 
+                # Fetch skewer.yaml from the repo (if exists)
+                skewer_url = f"https://raw.githubusercontent.com/skupperproject/{name}/main/skewer.yaml"
+                skewer_response = requests.get(skewer_url)
+
+                if skewer_response.status_code == 200:
+                    skewer_content = skewer_response.text
+                    # Save skewer.yaml content to skewer_<example-name>.yaml
+                    skewer_file = f"{output_dir}/skewer_{name}.yaml"
+                    with open(skewer_file, "w") as f:
+                        f.write(skewer_content)
+                else:
+                    print(f"skewer.yaml not found for {name}", file=sys.stderr)
+
+            except Exception as e:
+                print(f"Error fetching files for {name}: {str(e)}", file=sys.stderr)
             except Exception as e:
                 print(f"Error fetching README for {name}: {str(e)}", file=sys.stderr)
                 description = example_data.get("description", "No description available").strip()

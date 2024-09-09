@@ -1,0 +1,66 @@
+title: Accessing an FTP server using Skupper
+subtitle: Securely connect to an FTP server on a remote Kubernetes cluster
+overview: |
+  This example shows you how you can use Skupper to connect an FTP
+  client on one Kubernetes cluster to an FTP server on another.
+
+  It demonstrates use of Skupper with multi-port services such as FTP.
+  It uses FTP in passive mode (which is more typical these days) and a
+  [restricted port range][ports] that simplifies Skupper
+  configuration.
+
+  [ports]: https://github.com/skupperproject/skupper-example-ftp/blob/main/server/kubernetes.yaml#L25-L28
+sites:
+  public:
+    title: Public
+    platform: kubernetes
+    namespace: public
+    env:
+      KUBECONFIG: ~/.kube/config-public
+  private:
+    title: Private
+    platform: kubernetes
+    namespace: private
+    env:
+      KUBECONFIG: ~/.kube/config-private
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - title: Deploy the FTP server
+    preamble: |
+      In Private, use `kubectl apply` to deploy the FTP server.
+    commands:
+      private:
+        - run: kubectl apply -f server
+          output: deployment.apps/ftp-server created
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+  - title: Expose the FTP server
+    preamble: |
+      In Private, use `skupper expose` to expose the FTP server on all
+      linked sites.
+    commands:
+      private:
+        - await_resource: deployment/ftp-server
+        - run: skupper expose deployment/ftp-server --port 21100 --port 21
+          output: deployment ftp-server exposed as ftp-server
+  - title: Run the FTP client
+    preamble: |
+      In Public, use `kubectl run` and the `curl` image to perform FTP
+      put and get operations.
+    commands:
+      public:
+        - await_resource: service/ftp-server
+        - run: echo "Hello!" | kubectl run ftp-client --stdin --rm --image=docker.io/curlimages/curl --restart=Never -- -s -T - ftp://example:example@ftp-server/greeting
+          output: pod "ftp-client" deleted
+        - run: kubectl run ftp-client --attach --rm --image=docker.io/curlimages/curl --restart=Never -- -s ftp://example:example@ftp-server/greeting
+          output: |
+            Hello!
+            pod "ftp-client" deleted
+  - standard: cleaning_up
+    commands:
+      public:
+        - run: skupper delete
+      private:
+        - run: skupper delete
+        - run: kubectl delete -f server

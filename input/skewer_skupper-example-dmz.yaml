@@ -1,0 +1,80 @@
+title: Skupper Hello World DMZ
+subtitle: Connect services separated by firewalls and a DMZ
+overview: |
+  This example is a basic multi-service HTTP application deployed
+  across one Kubernetes cluster in the public cloud and another
+  Kubernetes cluster in a private data center.  They are separated by
+  a DMZ and two firewalls.
+
+  It contains two services:
+
+  * A backend service that exposes an `/api/hello` endpoint.  It
+    returns greetings of the form `Hi, <your-name>.  I am <my-name>
+    (<pod>)`.
+
+  * A frontend service that connects to the backend.  It sends
+    greetings to the backend and fetches new greetings in response.
+
+  The backend service runs in the private on-prem cluster, and the
+  frontend service runs in the public cloud.  The private and public
+  sites are linked by a relay site in the DMZ.  Skupper enables the
+  frontend to connect to the backend over a secure dedicated
+  application network.
+
+  <img src="images/entities.svg" style="max-width: 100%;"/>
+sites:
+  public:
+    title: Public
+    platform: kubernetes
+    namespace: public
+    env:
+      KUBECONFIG: ~/.kube/config-public
+  private:
+    title: Private
+    platform: kubernetes
+    namespace: private
+    env:
+      KUBECONFIG: ~/.kube/config-private
+  dmz:
+    title: DMZ
+    platform: kubernetes
+    namespace: dmz
+    env:
+      KUBECONFIG: ~/.kube/config-dmz
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - standard: hello_world/deploy_the_frontend_and_backend
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+    commands:
+      public:
+        - run: skupper token create ~/public.token
+          output: |
+            Token written to ~/public.token
+      private:
+        - run: skupper token create ~/private.token
+          output: |
+            Token written to ~/private.token
+      dmz:
+        - run: skupper link create ~/public.token
+          output: |
+            Site configured to link to https://10.104.83.146:8081/7c60e772-ccca-11ee-ae58-04421a4c5042 (name=link1)
+            Check the status of the link using 'skupper link status'.
+        - run: skupper link create ~/private.token
+          output: |
+            Site configured to link to https://10.111.28.147:8081/7ccdd561-ccca-11ee-8269-04421a4c5042 (name=link2)
+            Check the status of the link using 'skupper link status'.
+  - standard: hello_world/expose_the_backend
+  - standard: hello_world/access_the_frontend
+  - standard: hello_world/cleaning_up
+    commands:
+      public:
+        - run: skupper delete
+        - run: kubectl delete service/frontend
+        - run: kubectl delete deployment/frontend
+      private:
+        - run: skupper delete
+        - run: kubectl delete deployment/backend
+      dmz:
+        - run: skupper delete

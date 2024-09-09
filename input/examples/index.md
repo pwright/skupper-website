@@ -39,18 +39,18 @@ conventional applications across multiple sites.
 </nav>
 </div>
 <div>
-<h3><a href="#">Bookinfo</a></h3>
-<p>No description available</p>
+<h3><a href="https://github.com/skupperproject/skupper-example-bookinfo">Bookinfo</a></h3>
+<p>Deploy the Istio Bookinfo application across sites using Skupper</p>
 <nav class="inline-links">
-<a href="#"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-bookinfo"><span class="fab fa-github fa-lg"></span> Example</a>
 <a href="https://www.youtube.com/watch?v=H80GLl-KdTc"><span class="fab fa-youtube fa-lg"></span> Video</a>
 </nav>
 </div>
 <div>
-<h3><a href="#">Online Boutique</a></h3>
-<p>No description available</p>
+<h3><a href="https://github.com/skupperproject/skupper-example-grpc">Online Boutique</a></h3>
+<p>Deploy the gRPC-based Online Boutique application across sites using Skupper</p>
 <nav class="inline-links">
-<a href="#"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-grpc"><span class="fab fa-github fa-lg"></span> Example</a>
 </nav>
 </div>
 <div>
@@ -216,10 +216,10 @@ be, while accessing it from wherever your services are running.
 <div class="examples">
 
 <div>
-<h3><a href="#">MongoDB</a></h3>
-<p>No description available</p>
+<h3><a href="https://github.com/skupperproject/skupper-example-mongodb-replica-set">MongoDB</a></h3>
+<p>Deploy a MongoDB replica set across sites using Skupper</p>
 <nav class="inline-links">
-<a href="#"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-mongodb-replica-set"><span class="fab fa-github fa-lg"></span> Example</a>
 </nav>
 </div>
 <div>
@@ -230,10 +230,10 @@ be, while accessing it from wherever your services are running.
 </nav>
 </div>
 <div>
-<h3><a href="#">PostgreSQL</a></h3>
-<p>No description available</p>
+<h3><a href="https://github.com/skupperproject/skupper-example-postgresql">PostgreSQL</a></h3>
+<p>Access a PostgreSQL database in a private data center from the public cloud</p>
 <nav class="inline-links">
-<a href="#"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-postgresql"><span class="fab fa-github fa-lg"></span> Example</a>
 <a href="https://www.youtube.com/watch?v=Oa0aVpb0v7U"><span class="fab fa-youtube fa-lg"></span> Video</a>
 </nav>
 </div>
@@ -316,17 +316,17 @@ protocols.
 </nav>
 </div>
 <div>
-<h3><a href="#">iPerf</a></h3>
-<p>No description available</p>
+<h3><a href="https://github.com/skupperproject/skupper-example-iperf">iPerf</a></h3>
+<p>Perform real-time network throughput measurements using iPerf3</p>
 <nav class="inline-links">
-<a href="#"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-iperf"><span class="fab fa-github fa-lg"></span> Example</a>
 </nav>
 </div>
 <div>
-<h3><a href="#">Prometheus</a></h3>
-<p>No description available</p>
+<h3><a href="https://github.com/skupperproject/skupper-example-prometheus">Prometheus</a></h3>
+<p>Gather Prometheus metrics from endpoints deployed across multiple clusters</p>
 <nav class="inline-links">
-<a href="#"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-prometheus"><span class="fab fa-github fa-lg"></span> Example</a>
 </nav>
 </div>
 </div>

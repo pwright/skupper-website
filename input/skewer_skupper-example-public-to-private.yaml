@@ -1,0 +1,44 @@
+title: Skupper Hello World public to private
+subtitle: Connect from the cloud to services running on-prem
+overview: |
+  This example is a basic multi-service HTTP application deployed
+  across one Kubernetes cluster in the public cloud and another
+  Kubernetes cluster in a private data center.
+
+  It contains two services:
+
+  * A backend service that exposes an `/api/hello` endpoint.  It
+    returns greetings of the form `Hi, <your-name>.  I am <my-name>
+    (<pod>)`.
+
+  * A frontend service that connects to the backend.  It sends
+    greetings to the backend and fetches new greetings in response.
+
+  The backend service runs in the private on-prem cluster, and the
+  frontend service runs in the public cloud.  Skupper enables the
+  frontend to connect to the backend over a secure dedicated
+  application network.
+
+  <img src="images/entities.svg" style="max-width: 100%;"/>
+sites:
+  public:
+    title: Public
+    platform: kubernetes
+    namespace: public
+    env:
+      KUBECONFIG: ~/.kube/config-public
+  private:
+    title: Private
+    platform: kubernetes
+    namespace: private
+    env:
+      KUBECONFIG: ~/.kube/config-private
+steps:
+  - standard: general/install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_clusters
+  - standard: hello_world/deploy_the_frontend_and_backend
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+  - standard: hello_world/expose_the_backend
+  - standard: hello_world/access_the_frontend
+  - standard: hello_world/cleaning_up

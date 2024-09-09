@@ -1,0 +1,130 @@
+title: Trade Zoo
+subtitle: |
+  A simple trading application that runs in the public cloud but keeps its data in a private Kafka cluster
+overview: |
+  This example is a simple Kafka application that shows how you can
+  use Skupper to access a Kafka cluster at a remote site without
+  exposing it to the public internet.
+
+  It contains four services:
+
+  * A Kafka cluster running in a private data center.  The cluster has
+    two topics, "orders" and "updates".
+
+  * An order processor running in the public cloud.  It consumes from
+    "orders", matching buy and sell offers to make trades.  It
+    publishes new and updated orders and trades to "updates".
+
+  * A market data service running in the public cloud.  It looks at
+    the completed trades and computes the latest and average prices,
+    which it then publishes to "updates".
+
+  * A web frontend service running in the public cloud.  It submits
+    buy and sell orders to "orders" and consumes from "updates" in
+    order to show what's happening.
+
+  To set up the Kafka cluster, this example uses the Kubernetes
+  operator from the [Strimzi][strimzi] project.  The other services
+  are small Python programs.
+
+  The example uses two Kubernetes namespaces, "private" and "public",
+  to represent the private data center and public cloud.
+
+  [strimzi]: https://strimzi.io/
+sites:
+  public:
+    title: Public
+    platform: kubernetes
+    namespace: public
+    env:
+      KUBECONFIG: ~/.kube/config-public
+  private:
+    title: Private
+    platform: kubernetes
+    namespace: private
+    env:
+      KUBECONFIG: ~/.kube/config-private
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - title: Deploy the Kafka cluster
+    preamble: |
+      In Private, use the `kubectl create` and `kubectl apply`
+      commands with the listed YAML files to install the operator and
+      deploy the cluster and topic.
+    commands:
+      private:
+        - run: kubectl create -f kafka-cluster/strimzi.yaml
+        - run: kubectl apply -f kafka-cluster/cluster1.yaml
+        - await_resource: kafka/cluster1
+        - run: kubectl wait --for condition=ready --timeout 900s kafka/cluster1
+    postamble: |
+      **Note:**
+
+      By default, the Kafka bootstrap server returns broker addresses
+      that include the Kubernetes namespace in their domain name.
+      When, as in this example, the Kafka client is running in a
+      namespace with a different name from that of the Kafka cluster,
+      this prevents the client from resolving the Kafka brokers.
+
+      To make the Kafka brokers reachable, set the `advertisedHost`
+      property of each broker to a domain name that the Kafka client
+      can resolve at the remote site.  In this example, this is
+      achieved with the following listener configuration:
+
+      ~~~ yaml
+      spec:
+        kafka:
+          listeners:
+            - name: plain
+              port: 9092
+              type: internal
+              tls: false
+              configuration:
+                brokers:
+                  - broker: 0
+                    advertisedHost: cluster1-kafka-0.cluster1-kafka-brokers
+      ~~~
+
+      See [Advertised addresses for brokers][advertised-addresses] for
+      more information.
+
+      [advertised-addresses]: https://strimzi.io/docs/operators/in-development/configuring.html#property-listener-config-broker-reference
+  - title: Deploy the application services
+    preamble: |
+      In Public, use the `kubectl apply` command with the listed YAML
+      files to install the application services.
+    commands:
+      public:
+        - run: kubectl apply -f order-processor/kubernetes.yaml
+        - run: kubectl apply -f market-data/kubernetes.yaml
+        - run: kubectl apply -f frontend/kubernetes.yaml
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+  - title: Expose the Kafka cluster
+    preamble: |
+      In Private, use `skupper expose` with the `--headless` option to
+      expose the Kafka cluster as a headless service on the Skupper
+      network.
+
+      Then, in Public, use `kubectl get service` to check that the
+      `cluster1-kafka-brokers` service appears after a moment.
+    commands:
+      private:
+        - await_resource: statefulset/cluster1-kafka
+        - run: skupper expose statefulset/cluster1-kafka --headless --port 9092
+      public:
+        - await_resource: service/cluster1-kafka-brokers
+        - run: kubectl get service/cluster1-kafka-brokers
+  - standard: hello_world/access_the_frontend
+  - standard: cleaning_up
+    commands:
+      private:
+        - run: skupper delete
+        - run: kubectl delete -f kafka-cluster/cluster1.yaml
+        - run: kubectl delete -f kafka-cluster/strimzi.yaml
+      public:
+        - run: skupper delete
+        - run: kubectl delete -f frontend/kubernetes.yaml
+        - run: kubectl delete -f market-data/kubernetes.yaml
+        - run: kubectl delete -f order-processor/kubernetes.yaml

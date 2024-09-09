@@ -1,0 +1,79 @@
+title: Accessing a MySQL database using Skupper
+subtitle: Use public cloud resources to process data from an on-prem database
+overview: |
+  This example shows how you can use Skupper to access a MySQL
+  database at a remote site without exposing it to the public
+  internet.
+
+  It contains two services:
+
+  * A MySQL server running in a private data center.
+
+  * A MySQL client running in the public cloud.
+
+  The example uses two Kubernetes namespaces, "private" and "public",
+  to represent the private data center and public cloud.
+sites:
+  public:
+    title: Public
+    platform: kubernetes
+    namespace: public
+    env:
+      KUBECONFIG: ~/.kube/config-public
+  private:
+    title: Private
+    platform: kubernetes
+    namespace: private
+    env:
+      KUBECONFIG: ~/.kube/config-private
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - title: Deploy the database server
+    preamble: |
+      In the private namespace, use the `kubectl apply` command to
+      install the MySQL database server.
+    commands:
+      private:
+        - run: kubectl apply -f database
+          output: deployment.apps/database created
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+  - title: Expose the database server
+    preamble: |
+      In Private, use `skupper expose` to expose the database server
+      on the application network.
+
+      Then, in Public, use `kubectl get service/database` to check
+      that the `database` service appears after a moment.
+    commands:
+      private:
+        - await_resource: deployment/database
+        - run: skupper expose deployment/database --port 3306
+          output: deployment server exposed as server
+      public:
+        - await_resource: service/database
+        - run: kubectl get service/database
+          output: |
+            NAME       TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+            database   ClusterIP   10.100.58.95   <none>        3306/TCP   2s
+  - title: Run the database client
+    preamble: |
+      In the public namespace, use `kubectl run` to run the client.
+    commands:
+      public:
+        - await_resource: service/database
+        - run: for i in {1..90}; do sleep 2; if kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1" >/dev/null; then break; fi; done
+          apply: test
+        - run: kubectl run client --attach --rm --image docker.io/library/mysql --restart Never --env MYSQL_PWD=secret -- mysql -h database -u root -e "select 1"
+          output: |
+            1
+            1
+            pod "client" deleted
+  - standard: cleaning_up
+    commands:
+      private:
+        - run: kubectl delete -f database
+        - run: skupper delete
+      public:
+        - run: skupper delete

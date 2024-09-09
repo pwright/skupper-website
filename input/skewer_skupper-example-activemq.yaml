@@ -1,0 +1,119 @@
+title: Accessing ActiveMQ using Skupper
+subtitle: Use public cloud resources to process data from a private message broker
+overview: |
+  This example is a simple messaging application that shows how you
+  can use Skupper to access an ActiveMQ broker at a remote site
+  without exposing it to the public internet.
+
+  It contains two services:
+
+  * An ActiveMQ broker running in a private data center.  The broker
+    has a queue named "notifications".
+
+  * An AMQP client running in the public cloud.  It sends 10 messages
+    to "notifications" and then receives them back.
+
+  For the broker, this example uses the [Apache ActiveMQ
+  Artemis][artemis] image from [ArtemisCloud.io][artemiscloud].  The
+  client is a simple [Quarkus][quarkus] application.
+
+  The example uses two Kubernetes namespaces, "private" and "public",
+  to represent the private data center and public cloud.
+
+  [artemis]: https://activemq.apache.org/components/artemis/
+  [artemiscloud]: https://artemiscloud.io/
+  [quarkus]: https://quarkus.io/
+sites:
+  public:
+    title: Public
+    platform: kubernetes
+    namespace: public
+    env:
+      KUBECONFIG: ~/.kube/config-public
+  private:
+    title: Private
+    platform: kubernetes
+    namespace: private
+    env:
+      KUBECONFIG: ~/.kube/config-private
+steps:
+  - standard: install_the_skupper_command_line_tool
+  - standard: kubernetes/set_up_your_namespaces
+  - title: Deploy the message broker
+    preamble: |
+      In Private, use the `kubectl apply` command to install the
+      broker.
+    commands:
+      private:
+        - run: kubectl apply -f server
+          output: deployment.apps/broker created
+  - standard: kubernetes/create_your_sites
+  - standard: kubernetes/link_your_sites
+  - title: Expose the message broker
+    preamble: |
+      In Private, use `skupper expose` to expose the broker on the
+      Skupper network.
+
+      Then, in Public, use `kubectl get service/broker` to check that
+      the service appears after a moment.
+    commands:
+      private:
+        - await_resource: deployment/broker
+        - run: skupper expose deployment/broker --port 5672
+          output: deployment broker exposed as broker
+      public:
+        - await_resource: service/broker
+        - run: kubectl get service/broker
+          output: |
+            NAME     TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)    AGE
+            broker   ClusterIP   10.100.58.95   <none>        5672/TCP   2s
+  - title: Run the client
+    preamble: |
+      In Public, use `kubectl run` to run the client.
+    commands:
+      public:
+        - await_resource: service/broker
+        - run: kubectl run client --attach --rm --restart Never --image quay.io/skupper/activemq-example-client --env SERVER=broker
+          output: |
+            __  ____  __  _____   ___  __ ____  ______
+             --/ __ \/ / / / _ | / _ \/ //_/ / / / __/
+             -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \
+            --\___\_\____/_/ |_/_/|_/_/|_|\____/___/
+            2022-05-27 11:19:07,149 INFO  [io.sma.rea.mes.amqp] (main) SRMSG16201: AMQP broker configured to broker:5672 for channel incoming-messages
+            2022-05-27 11:19:07,170 INFO  [io.sma.rea.mes.amqp] (main) SRMSG16201: AMQP broker configured to broker:5672 for channel outgoing-messages
+            2022-05-27 11:19:07,198 INFO  [io.sma.rea.mes.amqp] (main) SRMSG16212: Establishing connection with AMQP broker
+            2022-05-27 11:19:07,212 INFO  [io.sma.rea.mes.amqp] (main) SRMSG16212: Establishing connection with AMQP broker
+            2022-05-27 11:19:07,215 INFO  [io.quarkus] (main) client 1.0.0-SNAPSHOT on JVM (powered by Quarkus 2.9.2.Final) started in 0.397s.
+            2022-05-27 11:19:07,215 INFO  [io.quarkus] (main) Profile prod activated.
+            2022-05-27 11:19:07,215 INFO  [io.quarkus] (main) Installed features: [cdi, smallrye-context-propagation, smallrye-reactive-messaging, smallrye-reactive-messaging-amqp, vertx]
+            Sent message 1
+            Sent message 2
+            Sent message 3
+            Sent message 4
+            Sent message 5
+            Sent message 6
+            Sent message 7
+            Sent message 8
+            Sent message 9
+            Sent message 10
+            2022-05-27 11:19:07,434 INFO  [io.sma.rea.mes.amqp] (vert.x-eventloop-thread-0) SRMSG16213: Connection with AMQP broker established
+            2022-05-27 11:19:07,442 INFO  [io.sma.rea.mes.amqp] (vert.x-eventloop-thread-0) SRMSG16213: Connection with AMQP broker established
+            2022-05-27 11:19:07,468 INFO  [io.sma.rea.mes.amqp] (vert.x-eventloop-thread-0) SRMSG16203: AMQP Receiver listening address notifications
+            Received message 1
+            Received message 2
+            Received message 3
+            Received message 4
+            Received message 5
+            Received message 6
+            Received message 7
+            Received message 8
+            Received message 9
+            Received message 10
+            Result: OK
+  - standard: cleaning_up
+    commands:
+      private:
+        - run: kubectl delete -f server
+        - run: skupper delete
+      public:
+        - run: skupper delete

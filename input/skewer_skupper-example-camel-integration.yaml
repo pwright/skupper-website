@@ -1,0 +1,152 @@
+title: Skupper Camel Integration Example
+subtitle: Twitter, Telegram and PostgreSQL integration routes deployed across Kubernetes clusters using Skupper
+overview: |
+  In this example we can see how to integrate different Camel integration routers
+  that can be deployed across multiple Kubernetes clusters using Skupper.
+
+  The main idea of this project is to show a Camel integration deployed in a public cluster
+  which searches tweets that contain the word 'skupper'. Those results are sent to a
+  private cluster that has a database deployed. A third public cluster will ping the database
+  and send new results to a Telegram channel.
+
+  In order to run this example you will need to create a Telegram channel and a Twitter Account
+  to use its credentials.
+
+  It contains the following components:
+
+  * A Twitter Camel integration that searches in the Twitter feed for results containing the word `skupper` (public).
+
+  * A PostgreSQL Camel sink that receives the data from the Twitter Camel router and sends it to the database (public).
+
+  * A PostgreSQL database that contains the results (private).
+
+  * A Telegram Camel integration that polls the database and sends the results to a Telegram channel (public).
+
+
+prerequisites: |
+  * The `kubectl` command-line tool, version 1.15 or later
+  ([installation guide][install-kubectl])
+
+  * The `skupper` command-line tool, the latest version ([installation
+  guide][install-skupper])
+
+  * Access to at least one Kubernetes cluster, from any provider you
+  choose
+
+  * `Kamel` installation to deploy the Camel integrations per namespace.
+  In minikube you will need to execute the following commands:
+  ```
+  minikube addons enable registry
+  kamel install
+  ```
+
+  * A `Twitter Developer Account` in order to use the Twiter API (you need to add the credentials in `config.properties` file)
+
+  * Create a `Telegram` Bot and Channel to publish messages (you need to add the credentials in `config.properties` file)
+sites:
+  private1:
+    kubeconfig: ~/.kube/config-private1
+    namespace: private1
+  public1:
+    kubeconfig: ~/.kube/config-public1
+    namespace: public1
+  public2:
+    kubeconfig: ~/.kube/config-public2
+    namespace: public2
+steps:
+  - standard: configure_separate_console_sessions
+  - standard: access_your_clusters
+  - standard: set_up_your_namespaces
+  - standard: install_skupper_in_your_namespaces
+  - standard: check_the_status_of_your_namespaces
+  - title: Link your namespaces
+    preamble: !string link_your_namespaces_preamble
+    commands:
+      public1:
+        - run: skupper token create ~/public1.token --uses 2
+      public2:
+        - run: skupper link create ~/public1.token
+        - run: skupper link status --wait 30
+        - run: skupper token create ~/public2.token
+      private1:
+        - run: skupper link create ~/public1.token
+        - run: skupper link create ~/public2.token
+        - run: skupper link status --wait 30
+    postamble: !string link_your_namespaces_postamble
+  - title: Deploy and expose the database in the private cluster
+    preamble: |
+      Use `kubectl apply` to deploy the database in `private1`. Then expose the deployment.
+    commands:
+      private1:
+        - run: kubectl create -f src/main/resources/database/postgres-svc.yaml
+          await: [deployment/postgres]
+        - run: skupper expose deployment postgres --address postgres --port 5432 -n private1
+  - title: Create the table to store the tweets
+    commands:
+      private1:
+        - run: kubectl run pg-shell -i --tty --image quay.io/skupper/simple-pg --env="PGUSER=postgresadmin" --env="PGPASSWORD=admin123" --env="PGHOST=$(kubectl get service postgres -o=jsonpath='{.spec.clusterIP}')" -- bash
+        - run: psql --dbname=postgresdb
+        - run: CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        - run: CREATE TABLE tw_feedback (id uuid DEFAULT uuid_generate_v4 (),sigthning VARCHAR(255),created TIMESTAMP default CURRENT_TIMESTAMP,PRIMARY KEY(id));
+  - title: Deploy Twitter Camel Integration in the public cluster
+    preamble: |
+      First, we need to deploy the `TwitterRoute` component in Kubernetes by using kamel. This component will poll Twitter
+      every 5000 ms for tweets that include the word `skupper`. Subsequently, it will send the results to the
+      `postgresql-sink`, that should be installed in the same cluster as well.
+      The kamelet sink will insert the results in the postgreSQL database.
+
+    commands:
+      public1:
+        - run: src/main/resources/scripts/setUpPublic1Cluster.sh
+  - title: Deploy Telegram Camel integration in the public cluster
+    preamble: |
+      In this step we will install the secret in Kubernetes that contains the database credentials, in order to be used
+      by the `TelegramRoute` component.
+      After that we will deploy `TelegramRoute` using kamel in the Kubernetes cluster. This component will poll the
+      database every 3 seconds and gather the results inserted during the last 3 seconds.
+    commands:
+      public2:
+        - run: src/main/resources/scripts/setUpPublic2Cluster.sh
+  - title: Test the application
+    preamble: |
+      To be able to see the whole flow at work, you need to post a tweet containing the word `skupper` and after that
+      you will see a new message in the Telegram channel with the title `New feedback about Skupper`
+    commands:
+      private1:
+        - run: kubectl attach pg-shell -c pg-shell -i -t
+        - run: psql --dbname=postgresdb
+        - run: SELECT * FROM tw_feedback;
+          output: |
+            id                                    | sigthning       |          created
+            --------------------------------------+-----------------+----------------------------
+             95655229-747a-4787-8133-923ef0a1b2ca | Testing skupper | 2022-03-10 19:35:08.412542
+      public1:
+        - run: kamel logs twitter-route
+          output: |
+            "[1] 2022-03-10 19:35:08,397 INFO  [postgresql-sink-1] (Camel (camel-1) thread #0 - twitter-search://skupper) Testing skupper"
+summary: |
+  This example locates the different camel integrations in different
+  namespaces, on different clusters. This means that they
+  have no way to communicate with the database deployed in the private cluster
+  unless they are exposed to the public internet.
+
+  Introducing Skupper into each namespace allows us to create a virtual
+  application network that can connect services in different clusters.
+  Any service exposed on the application network is represented as a
+  local service in all of the linked namespaces.
+
+  The database is located in `private1`, but the TelegramRoute integration
+  in `public2` can "see" it as if it were local.  When the integration pulls
+  the database, Skupper forwards the request to the namespace where the database is running
+  and routes the response back to the integration component.
+
+cleaning_up:
+  preamble: !string cleaning_up_preamble
+  commands:
+    private1:
+      - run: src/main/resources/scripts/tearDownPrivate1Cluster.sh
+    public1:
+      - run: src/main/resources/scripts/tearDownPublic1Cluster.sh
+    public2:
+      - run: src/main/resources/scripts/tearDownPublic2Cluster.sh
+next_steps: !string next_steps
