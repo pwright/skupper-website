@@ -387,7 +387,7 @@ the following commands:
 _**Public:**_
 
 ~~~ shell
-skupper delete
+skupper delete  
 kubectl delete service/frontend
 kubectl delete deployment/frontend
 ~~~
