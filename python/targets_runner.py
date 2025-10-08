@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# targets_runner.py — minimal, stdlib-first runner for targets.yaml
+# targets_runner.py — minimal runner with Plano-style debug logs
 from __future__ import annotations
 
 import argparse
@@ -18,9 +18,76 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-# ---------- YAML LOADING (prefer Plano helpers if present, else PyYAML) ----------
+# -------------------- Logging (Plano-ish) --------------------
+
+VERBOSE = False
+USE_COLOR = False
+
+def _isatty_stderr() -> bool:
+    try:
+        return sys.stderr.isatty()
+    except Exception:
+        return False
+
+def _setup_logging(verbose: bool, no_color: bool) -> None:
+    global VERBOSE, USE_COLOR
+    VERBOSE = bool(verbose or os.environ.get("PLANO_DEBUG") in ("1", "true", "yes"))
+    USE_COLOR = False if no_color else _isatty_stderr()
+
+def _c(code: str) -> str:
+    return code if USE_COLOR else ""
+
+C_RESET = _c("\x1b[0m")
+C_BOLD  = _c("\x1b[1m")
+C_DIM   = _c("\x1b[2m")
+C_GREEN = _c("\x1b[32m")
+C_YELL  = _c("\x1b[33m")
+C_RED   = _c("\x1b[31m")
+C_BLUE  = _c("\x1b[34m")
+
+def _ts() -> str:
+    return time.strftime("%H:%M:%S")
+
+def _log(msg: str) -> None:
+    # plain line to stderr
+    print(msg, file=sys.stderr)
+
+def log_begin(op: str, detail: str = "") -> float:
+    # --> op detail
+    if VERBOSE:
+        _log(f"{C_BOLD}--> {op}{C_RESET} {detail}".rstrip())
+    return time.time()
+
+def log_step(prefix: str, detail: str) -> None:
+    # -> or + or ! lines
+    if VERBOSE:
+        _log(f"{prefix} {detail}")
+
+def log_end(start: float, status: str = "ok") -> None:
+    if VERBOSE:
+        dur = time.time() - start
+        if status == "ok":
+            _log(f"{C_GREEN}<-- ok{C_RESET} ({dur:.3f}s)")
+        elif status == "warn":
+            _log(f"{C_YELL}<-- warn{C_RESET} ({dur:.3f}s)")
+        else:
+            _log(f"{C_RED}<-- fail{C_RESET} ({dur:.3f}s)")
+
+def log_cmd(cmd: Sequence[str]) -> None:
+    if VERBOSE:
+        line = " ".join(shlex.quote(c) for c in cmd)
+        _log(f"{C_BLUE}+{C_RESET} {line}")
+
+def warn(msg: str) -> None:
+    _log(f"{C_YELL}!{C_RESET} {msg}")
+
+def fail(msg: str) -> None:
+    _log(f"{C_RED}xx{C_RESET} {msg}")
+
+# -------------------- YAML loading --------------------
+
 def _load_yaml_str(data: str) -> Dict[str, Any]:
-    # Plano yaml helper variants
+    # Prefer Plano helpers if available
     try:
         from plano import yaml as plano_yaml  # type: ignore[attr-defined]
         return plano_yaml.load(data) or {}
@@ -34,19 +101,16 @@ def _load_yaml_str(data: str) -> Dict[str, Any]:
     # Fallback: PyYAML
     try:
         import yaml  # type: ignore
-    except Exception as e:
-        print(
-            "[targets-runner] No YAML loader found. Install PyYAML or expose plano.load_yaml.",
-            file=sys.stderr,
-        )
+    except Exception:
+        fail("No YAML loader found. Install PyYAML or expose plano.load_yaml.")
         raise
     return yaml.safe_load(data) or {}
 
-# ---------- GITIGNORE SUPPORT (optional pathspec) ----------
+# -------------------- gitignore support --------------------
+
 def _compile_gitignore(lines: List[str]):
     try:
         import pathspec  # type: ignore
-
         return pathspec.PathSpec.from_lines("gitwildmatch", lines)
     except Exception:
         pats = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
@@ -59,7 +123,8 @@ def _gitignore_match(spec, relpath: str) -> bool:
         return spec.match_file(relpath)
     return any(fnmatch.fnmatch(relpath, pat) for pat in spec)
 
-# ---------- DATA CLASSES ----------
+# -------------------- Data classes --------------------
+
 @dataclass
 class Defaults:
     recursive: bool = True
@@ -80,7 +145,7 @@ class ScriptDef:
 @dataclass
 class ScriptUse:
     name: str
-    timeout_sec: Optional[int] = None    # per-use override
+    timeout_sec: Optional[int] = None
 
 @dataclass
 class ExecutionCfg:
@@ -113,9 +178,7 @@ class OutputCfg:
     ])
     merge_streams: bool = False
 
-# ---------- UTIL ----------
-def _eprint(msg: str) -> None:
-    print(msg, file=sys.stderr)
+# -------------------- Utils --------------------
 
 def _expand(path: str) -> pathlib.Path:
     return pathlib.Path(os.path.expanduser(path)).resolve()
@@ -130,32 +193,34 @@ def _safe_rel(root: pathlib.Path, p: pathlib.Path) -> str:
     except Exception:
         return str(p)
 
-def _now() -> float:
-    return time.time()
-
-def _template(s: str, mapping: Dict[str, str]) -> str:
-    # Simple brace templating: replaces {key} with mapping[key] if present
-    def rep(m: re.Match) -> str:
-        key = m.group(1)
-        return mapping.get(key, m.group(0))
-    return re.sub(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", rep, s)
-
 def _build_env(defaults_env: Dict[str, str]) -> Dict[str, str]:
     env = os.environ.copy()
     env.update(defaults_env or {})
     return env
 
-# ---------- DISCOVERY ----------
+# -------------------- Config builders --------------------
+
 def _load_config_from_path_or_stdin(config_arg: str) -> Dict[str, Any]:
-    if config_arg == "-":
-        data = sys.stdin.read()
-        if not data:
-            raise ValueError("config='-' but no data on stdin")
-        return _load_yaml_str(data)
-    p = _expand(config_arg)
-    if not p.exists():
-        raise FileNotFoundError("Config file not found: {}".format(p))
-    return _load_yaml_str(p.read_text(encoding="utf-8"))
+    op = log_begin("load-config", config_arg)
+    try:
+        if config_arg == "-":
+            data = sys.stdin.read()
+            if not data:
+                raise ValueError("config='-' but no data on stdin")
+            cfg = _load_yaml_str(data)
+        else:
+            p = _expand(config_arg)
+            if not p.exists():
+                raise FileNotFoundError("Config file not found: {}".format(p))
+            cfg = _load_yaml_str(p.read_text(encoding="utf-8"))
+        log_end(op, "ok")
+        if VERBOSE:
+            tgt_count = len(cfg.get("targets") or [])
+            _log(f"{C_DIM}.. config targets: {tgt_count}{C_RESET}")
+        return cfg
+    except Exception:
+        log_end(op, "fail")
+        raise
 
 def _build_defaults(dct: Dict[str, Any]) -> Defaults:
     dd = dct.get("defaults", {}) or {}
@@ -206,6 +271,7 @@ def _build_targets(dct: Dict[str, Any], defaults: Defaults) -> List[Target]:
             path=str(t["path"]),
             recursive=t.get("recursive"),
             follow_symlinks=t.get("follow_symlinks"),
+            # Always pass a dict to _build_filter()
             filter=_build_filter(t.get("filter") or {}),
             execution=_build_execution(t.get("execution"), defaults),
             scripts=[ScriptUse(name=s["use"], timeout_sec=s.get("timeout_sec")) for s in (t.get("scripts") or [])],
@@ -223,12 +289,19 @@ def _build_output(dct: Dict[str, Any]) -> OutputCfg:
         merge_streams=bool(oc.get("merge_streams", False)),
     )
 
-# ---------- FILE MATCHING ----------
+# -------------------- Discovery --------------------
+
 def _collect_matches_for_target(t: Target, defaults: Defaults) -> Tuple[pathlib.Path, List[pathlib.Path]]:
+    op = log_begin("discover", f"target={t.name}")
     root = _expand(t.path)
+
     if t.type == "file":
         if not root.exists():
+            log_end(op, "fail")
             raise FileNotFoundError("Target file not found: {}".format(root))
+        if VERBOSE:
+            _log(f"{C_DIM}.. file: {root}{C_RESET}")
+        log_end(op, "ok")
         return root.parent, [root]
 
     # directory walk
@@ -244,24 +317,22 @@ def _collect_matches_for_target(t: Target, defaults: Defaults) -> Tuple[pathlib.
             try:
                 lines.extend(pathlib.Path(p).read_text(encoding="utf-8").splitlines())
             except Exception:
-                pass
+                warn(f"cannot read gitignore: {p}")
         gi_spec = _compile_gitignore(lines)
 
     includes = filt.include_globs or ["**/*"]
     excludes = filt.exclude_globs or []
 
     matches: List[pathlib.Path] = []
-    if recursive:
-        walker = root.rglob("*" if includes == ["**/*"] else "*")
-    else:
-        walker = root.glob("*")
+    # NOTE: pathlib doesn't honor follow_symlinks on glob; rglob follows by default for dirs.
+    # We skip adding symlinked files explicitly if follow_symlinks=False.
+    walker = (root.rglob("*") if recursive else root.glob("*"))
 
     for p in walker:
         try:
+            if not follow and p.is_symlink():
+                continue
             rp = _safe_rel(root, p)
-            is_dir = p.is_dir()
-            # We only consider files for per-file mode by default; dirs matter if scripts expect directory or mode=per-target.
-            # Filtering applies to both files and dirs (for exclude).
             if gi_spec is not None and _gitignore_match(gi_spec, rp):
                 continue
             if excludes and any(fnmatch.fnmatch(rp, pat) for pat in excludes):
@@ -270,12 +341,16 @@ def _collect_matches_for_target(t: Target, defaults: Defaults) -> Tuple[pathlib.
                 continue
             matches.append(p)
         except Exception:
-            # Best effort; skip unreadable entries
             continue
 
+    if VERBOSE:
+        _log(f"{C_DIM}.. root={root} recursive={recursive} follow_symlinks={follow}{C_RESET}")
+        _log(f"{C_DIM}.. matches={len(matches)}{C_RESET}")
+    log_end(op, "ok")
     return root, matches
 
-# ---------- COMMAND EXECUTION ----------
+# -------------------- Execution --------------------
+
 def _run_cmd(
     cmd: Sequence[str],
     *,
@@ -284,7 +359,8 @@ def _run_cmd(
     timeout_sec: Optional[int],
     merge_streams: bool,
 ) -> Tuple[int, bytes, bytes, float]:
-    start = _now()
+    start = time.time()
+    log_cmd(cmd)
     try:
         proc = subprocess.Popen(
             cmd,
@@ -298,12 +374,16 @@ def _run_cmd(
     except subprocess.TimeoutExpired:
         proc.kill()
         out, err = proc.communicate()
-        code = 124  # conventional timeout code
-    dur = _now() - start
+        code = 124  # conventional timeout
+        warn("timeout expired (killed process)")
+    dur = time.time() - start
     if out is None:
         out = b""
     if err is None:
         err = b""
+    if VERBOSE:
+        status = f"exit={code} dur={dur:.3f}s"
+        _log(f"{C_DIM}.. {status}{C_RESET}")
     return code, out, err, dur
 
 def _record(
@@ -312,22 +392,18 @@ def _record(
     item: Dict[str, Any],
 ) -> Optional[str]:
     if output_fmt == "ndjson":
-        # Only include requested fields
         filtered = {k: item.get(k) for k in include_fields if k in item}
         return json.dumps(filtered, ensure_ascii=False)
     elif output_fmt == "json":
-        # For simplicity, caller will aggregate; we return JSON per-item too
         filtered = {k: item.get(k) for k in include_fields if k in item}
         return json.dumps(filtered, ensure_ascii=False)
     elif output_fmt == "text":
-        # Print stdout if present, else minimal summary
         if "stdout" in item and item["stdout"]:
             return str(item["stdout"])
         return "[{target}:{script}] exit={exit_code}".format(
             target=item.get("target"), script=item.get("script"), exit_code=item.get("exit_code")
         )
     else:
-        # default to ndjson
         filtered = {k: item.get(k) for k in include_fields if k in item}
         return json.dumps(filtered, ensure_ascii=False)
 
@@ -349,7 +425,6 @@ def _build_mapping(
         mapping["relpath"] = _safe_rel(root, cur_file)
     return mapping
 
-# ---------- PIPELINE EXECUTION ----------
 def _exec_pipeline_for_file(
     *,
     target: Target,
@@ -365,17 +440,18 @@ def _exec_pipeline_for_file(
     tmpdir = pathlib.Path(tempfile.mkdtemp(prefix="targets-runner-"))
     prev_stdout: Optional[bytes] = None
 
+    op = log_begin("pipeline", f"target={target.name} file={file_path or root}")
     try:
         for use in target.scripts:
             sd = scripts_catalog.get(use.name)
             if sd is None:
-                # synthesize a failure record
+                warn(f"unknown script: {use.name}")
                 item = {
                     "target": target.name,
                     "script": use.name,
-                    "file": str(file_path) if file_path else None,
+                    "file": str(file_path) if file_path else str(root),
                     "stdout": "",
-                    "stderr": "unknown script: {}".format(use.name),
+                    "stderr": f"unknown script: {use.name}",
                     "exit_code": 127,
                     "duration_sec": 0.0,
                 }
@@ -393,9 +469,11 @@ def _exec_pipeline_for_file(
                     try:
                         stdin_bytes = _read_file_bytes(file_path)
                     except Exception as e:
+                        warn(f"cannot read file for stdin: {file_path}: {e}")
                         stdin_bytes = None
 
             timeout_sec = use.timeout_sec if use.timeout_sec is not None else defaults.timeout_sec
+            log_step("->", f"script={sd.name} expects={sd.expects or '-'} timeout={timeout_sec}s")
 
             code, out, err, dur = _run_cmd(
                 cmd,
@@ -418,12 +496,11 @@ def _exec_pipeline_for_file(
             }
             results.append(item)
 
-            # stop pipeline on first failure to mirror typical CI behavior
             if code != 0:
+                log_step("xx", f"pipeline halted (exit={code})")
                 break
-
     finally:
-        # best-effort cleanup
+        # cleanup tmpdir
         try:
             for child in tmpdir.iterdir():
                 try:
@@ -441,14 +518,22 @@ def _exec_pipeline_for_file(
             tmpdir.rmdir()
         except Exception:
             pass
+        log_end(op, "ok")
 
     return results
 
-# ---------- MAIN RUN LOOP ----------
+# -------------------- Main run loop --------------------
+
+def _template(s: str, mapping: Dict[str, str]) -> str:
+    def rep(m: re.Match) -> str:
+        key = m.group(1)
+        return mapping.get(key, m.group(0))
+    return re.sub(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}", rep, s)
+
 def _run_targets(
     config: Dict[str, Any],
     *,
-    output_fmt: str,
+    output_fmt: Optional[str],
     include_fields: List[str],
     merge_streams: bool,
     target_name: Optional[str],
@@ -456,29 +541,31 @@ def _run_targets(
     jobs_override: Optional[int],
     timeout_override: Optional[int],
     dry_run: bool,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], str, List[str]]:
     defaults = _build_defaults(config)
     scripts_catalog = _build_scripts(config)
     targets = _build_targets(config, defaults)
     output_cfg = _build_output(config)
 
-    # unify output overrides
     fmt = output_fmt or output_cfg.format
     fields = include_fields or output_cfg.include_fields
     merge = merge_streams if merge_streams is not None else output_cfg.merge_streams
 
     # filter targets
+    before = len(targets)
     if target_name:
         targets = [t for t in targets if t.name == target_name]
     elif target_regex:
         rx = re.compile(target_regex)
         targets = [t for t in targets if rx.search(t.name)]
+    if VERBOSE and (target_name or target_regex):
+        _log(f"{C_DIM}.. target-filter: {before} -> {len(targets)}{C_RESET}")
 
-    # If only listing targets, caller handles separately.
-
-    # Execute
     all_results: List[Dict[str, Any]] = []
+    op_all = log_begin("run", f"targets={len(targets)} fmt={fmt}")
+
     for tgt in targets:
+        log_step("->", f"target {tgt.name} type={tgt.type}")
         root, matches = _collect_matches_for_target(tgt, defaults)
         exec_cfg = tgt.execution or ExecutionCfg()
         mode = exec_cfg.mode or "per-file"
@@ -486,7 +573,6 @@ def _run_targets(
         workers = jobs_override or exec_cfg.parallelism or defaults.parallelism
         env = _build_env(defaults.env)
 
-        # Determine working set
         if tgt.type == "file":
             files = [matches[0]]
         else:
@@ -495,14 +581,17 @@ def _run_targets(
                 if order == "stable":
                     files.sort(key=lambda p: str(p))
             else:
-                files = []  # per-target, run once without per-file loop
+                files = []
+
+        if mode == "per-file" and tgt.type == "directory" and not files:
+            warn(f"target '{tgt.name}' matched zero files under {root}")
+            continue
 
         if dry_run:
             # Emit planned invocations as synthetic results
             if mode == "per-file":
                 for f in files:
                     mapping = _build_mapping(target=tgt, root=root, cur_file=f, tmpdir=pathlib.Path("/tmp"))
-                    prev = None
                     for use in tgt.scripts:
                         sd = scripts_catalog.get(use.name)
                         if sd is None:
@@ -510,7 +599,7 @@ def _run_targets(
                                 "target": tgt.name, "script": use.name, "file": str(f),
                                 "stdout": "", "stderr": "unknown script", "exit_code": 127
                             })
-                            break
+                            continue
                         cmd = [_template(sd.cmd, mapping)] + [_template(a, mapping) for a in (sd.args or [])]
                         all_results.append({
                             "target": tgt.name,
@@ -520,7 +609,6 @@ def _run_targets(
                             "stderr": "",
                             "exit_code": 0,
                         })
-                        prev = sd.name
             else:
                 mapping = _build_mapping(target=tgt, root=root, cur_file=None, tmpdir=pathlib.Path("/tmp"))
                 for use in tgt.scripts:
@@ -530,7 +618,7 @@ def _run_targets(
                             "target": tgt.name, "script": use.name, "file": str(root),
                             "stdout": "", "stderr": "unknown script", "exit_code": 127
                         })
-                        break
+                        continue
                     cmd = [_template(sd.cmd, mapping)] + [_template(a, mapping) for a in (sd.args or [])]
                     all_results.append({
                         "target": tgt.name,
@@ -543,7 +631,6 @@ def _run_targets(
             continue
 
         if mode == "per-file":
-            # parallel fan-out
             def job(pth: pathlib.Path) -> List[Dict[str, Any]]:
                 return _exec_pipeline_for_file(
                     target=tgt,
@@ -556,11 +643,10 @@ def _run_targets(
                     merge_streams=merge,
                 )
             with cf.ThreadPoolExecutor(max_workers=max(1, int(workers))) as ex:
-                futures = [ex.submit(job, f) for f in files]
-                for fut in cf.as_completed(futures):
+                futs = [ex.submit(job, f) for f in files]
+                for fut in cf.as_completed(futs):
                     all_results.extend(fut.result())
         else:
-            # per-target: run once with file_path=None
             all_results.extend(
                 _exec_pipeline_for_file(
                     target=tgt,
@@ -574,10 +660,11 @@ def _run_targets(
                 )
             )
 
-    # Printing is handled by caller; return list for JSON mode aggregation
+    log_end(op_all, "ok")
     return all_results, fmt, fields
 
-# ---------- CLI ----------
+# -------------------- CLI --------------------
+
 def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     ap = argparse.ArgumentParser(prog="targets_runner.py")
     ap.add_argument("--config", required=True, help="Path to targets.yaml or '-' for stdin")
@@ -589,18 +676,20 @@ def _parse_args(argv: Sequence[str]) -> argparse.Namespace:
     ap.add_argument("--merge-streams", action="store_true", help="Merge stdout/stderr from scripts")
     ap.add_argument("--dry-run", action="store_true", help="Print what would run; do not execute")
     ap.add_argument("--list-targets", action="store_true", help="List target names and exit")
+    ap.add_argument("--verbose", action="store_true", help="Verbose Plano-style logs to stderr")
+    ap.add_argument("--no-color", action="store_true", help="Disable ANSI colors in logs")
     return ap.parse_args(argv)
 
 def main(argv: Sequence[str] = None) -> int:
     ns = _parse_args(sys.argv[1:] if argv is None else argv)
+    _setup_logging(ns.verbose, ns.no_color)
 
     try:
         cfg = _load_config_from_path_or_stdin(ns.config)
     except Exception as e:
-        _eprint("[targets-runner] failed to load config: {}".format(e))
+        fail(f"failed to load config: {e}")
         return 2
 
-    # list-targets: print and exit 0
     if ns.list_targets:
         try:
             for t in (cfg.get("targets") or []):
@@ -609,7 +698,7 @@ def main(argv: Sequence[str] = None) -> int:
                     print(str(name))
             return 0
         except Exception as e:
-            _eprint("[targets-runner] failed listing targets: {}".format(e))
+            fail(f"failed listing targets: {e}")
             return 2
 
     try:
@@ -625,17 +714,16 @@ def main(argv: Sequence[str] = None) -> int:
             dry_run=bool(ns.dry_run),
         )
     except Exception as e:
-        _eprint("[targets-runner] run error: {}".format(e))
+        fail(f"run error: {e}")
         return 2
 
-    # Emit results
+    # Emit results to stdout (according to selected format)
     if fmt == "ndjson":
         for item in results:
             line = _record(fmt, fields, item)
             if line is not None:
                 print(line)
     elif fmt == "json":
-        # Aggregate as a list
         out_list = [{k: it.get(k) for k in fields if k in it} for it in results]
         print(json.dumps(out_list, ensure_ascii=False, indent=2))
     elif fmt == "text":
@@ -649,12 +737,12 @@ def main(argv: Sequence[str] = None) -> int:
             if line is not None:
                 print(line)
 
-    # Exit code: worst of all script invocations (non-zero if any failed)
+    # Overall exit code: non-zero if any script failed
     worst = 0
     for it in results:
         ec = int(it.get("exit_code", 0) or 0)
-        if ec != 0:
-            worst = ec if worst == 0 else worst
+        if ec != 0 and worst == 0:
+            worst = ec
     return worst
 
 if __name__ == "__main__":

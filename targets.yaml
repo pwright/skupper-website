@@ -1,17 +1,35 @@
 version: 1
-defaults: { recursive: false, parallelism: 2 }
+
+defaults:
+  recursive: true
+  parallelism: 4
+  timeout_sec: 30
+
 scripts:
-  echo_name:
-    cmd: "bash"
-    args: ["-lc", "echo NAME={name} PATH={path} FILE={file}"]
-    stdin: null
+  cat_file:
+    cmd: "cat"
+    args: []              # no args; read from stdin
+    stdin: "file"         # feed each matched file to stdin
     expects: "file"
+
 targets:
-  - name: "tin-file"
-    type: "file"
-    path: "./build/test.txt"
+  - name: "cat-build"
+    type: "directory"
+    path: "./build"
+    recursive: true
+    filter:
+      gitignore_paths: []         # or add ~/.gitignore if you want
+      include_globs: ["**/*"]     # or ["**/*.txt"] to restrict
+      exclude_globs:
+        - "**/.git/**"
+    execution:
+      mode: "per-file"            # run once per matched file
+      order: "stable"             # deterministic order
+      parallelism: 6              # optional per-target override
     scripts:
-      - use: "echo_name"
+      - use: "cat_file"
+
 output:
   format: "ndjson"
-  include_fields: ["target", "script", "file", "stdout", "exit_code"]
+  include_fields: ["target", "file", "stdout", "exit_code"]
+  merge_streams: false
