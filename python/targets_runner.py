@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-# targets_runner.py — minimal runner with Plano-style debug logs
+# targets_runner.py — minimal runner with Plano-style debug logs and proper globbing
 from __future__ import annotations
 
 import argparse
 import concurrent.futures as cf
-import fnmatch
 import io
 import json
 import os
 import pathlib
+from pathlib import PurePosixPath
 import re
 import shlex
 import subprocess
@@ -16,7 +16,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # -------------------- Logging (Plano-ish) --------------------
 
@@ -45,21 +45,15 @@ C_YELL  = _c("\x1b[33m")
 C_RED   = _c("\x1b[31m")
 C_BLUE  = _c("\x1b[34m")
 
-def _ts() -> str:
-    return time.strftime("%H:%M:%S")
-
 def _log(msg: str) -> None:
-    # plain line to stderr
     print(msg, file=sys.stderr)
 
 def log_begin(op: str, detail: str = "") -> float:
-    # --> op detail
     if VERBOSE:
         _log(f"{C_BOLD}--> {op}{C_RESET} {detail}".rstrip())
     return time.time()
 
 def log_step(prefix: str, detail: str) -> None:
-    # -> or + or ! lines
     if VERBOSE:
         _log(f"{prefix} {detail}")
 
@@ -106,22 +100,27 @@ def _load_yaml_str(data: str) -> Dict[str, Any]:
         raise
     return yaml.safe_load(data) or {}
 
-# -------------------- gitignore support --------------------
+# -------------------- gitignore support (optional) --------------------
 
 def _compile_gitignore(lines: List[str]):
     try:
         import pathspec  # type: ignore
         return pathspec.PathSpec.from_lines("gitwildmatch", lines)
     except Exception:
-        pats = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
-        return pats  # simple fnmatch fallback
+        # fallback: return cleaned patterns; we won't do git-accurate matching here
+        return [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
 
 def _gitignore_match(spec, relpath: str) -> bool:
     if spec is None:
         return False
     if hasattr(spec, "match_file"):
         return spec.match_file(relpath)
-    return any(fnmatch.fnmatch(relpath, pat) for pat in spec)
+    # naive fallback using POSIX-style Path.match
+    p = PurePosixPath(relpath.replace(os.sep, "/"))
+    for pat in spec:
+        if p.match(pat.replace(os.sep, "/")):
+            return True
+    return False
 
 # -------------------- Data classes --------------------
 
@@ -156,7 +155,7 @@ class ExecutionCfg:
 @dataclass
 class FilterCfg:
     gitignore_paths: List[str] = field(default_factory=list)
-    include_globs: List[str] = field(default_factory=lambda: ["**/*"])
+    include_globs: List[str] = field(default_factory=lambda: ["*","**/*"])
     exclude_globs: List[str] = field(default_factory=list)
 
 @dataclass
@@ -197,6 +196,15 @@ def _build_env(defaults_env: Dict[str, str]) -> Dict[str, str]:
     env = os.environ.copy()
     env.update(defaults_env or {})
     return env
+
+def _path_matches_patterns(relpath: str, patterns: List[str]) -> bool:
+    """Use Path.match so ** works like shell/glob. Always use POSIX separators."""
+    p = PurePosixPath(relpath.replace(os.sep, "/"))
+    for pat in patterns:
+        posix_pat = pat.replace(os.sep, "/")
+        if p.match(posix_pat):
+            return True
+    return False
 
 # -------------------- Config builders --------------------
 
@@ -246,9 +254,10 @@ def _build_scripts(dct: Dict[str, Any]) -> Dict[str, ScriptDef]:
     return res
 
 def _build_filter(fd: Dict[str, Any]) -> FilterCfg:
+    # Default include globs to match files at top-level AND recursively
     return FilterCfg(
         gitignore_paths=[str(_expand(p)) for p in (fd.get("gitignore_paths") or [])],
-        include_globs=[str(x) for x in (fd.get("include_globs") or ["**/*"])],
+        include_globs=[str(x) for x in (fd.get("include_globs") or ["*","**/*"])],
         exclude_globs=[str(x) for x in (fd.get("exclude_globs") or [])],
     )
 
@@ -271,7 +280,6 @@ def _build_targets(dct: Dict[str, Any], defaults: Defaults) -> List[Target]:
             path=str(t["path"]),
             recursive=t.get("recursive"),
             follow_symlinks=t.get("follow_symlinks"),
-            # Always pass a dict to _build_filter()
             filter=_build_filter(t.get("filter") or {}),
             execution=_build_execution(t.get("execution"), defaults),
             scripts=[ScriptUse(name=s["use"], timeout_sec=s.get("timeout_sec")) for s in (t.get("scripts") or [])],
@@ -307,7 +315,7 @@ def _collect_matches_for_target(t: Target, defaults: Defaults) -> Tuple[pathlib.
     # directory walk
     recursive = defaults.recursive if t.recursive is None else bool(t.recursive)
     follow = defaults.follow_symlinks if t.follow_symlinks is None else bool(t.follow_symlinks)
-    filt = t.filter or FilterCfg()
+    filt = t.filter or _build_filter({})
 
     # .gitignore
     gi_spec = None
@@ -320,12 +328,10 @@ def _collect_matches_for_target(t: Target, defaults: Defaults) -> Tuple[pathlib.
                 warn(f"cannot read gitignore: {p}")
         gi_spec = _compile_gitignore(lines)
 
-    includes = filt.include_globs or ["**/*"]
+    includes = filt.include_globs or ["*","**/*"]
     excludes = filt.exclude_globs or []
 
     matches: List[pathlib.Path] = []
-    # NOTE: pathlib doesn't honor follow_symlinks on glob; rglob follows by default for dirs.
-    # We skip adding symlinked files explicitly if follow_symlinks=False.
     walker = (root.rglob("*") if recursive else root.glob("*"))
 
     for p in walker:
@@ -333,11 +339,11 @@ def _collect_matches_for_target(t: Target, defaults: Defaults) -> Tuple[pathlib.
             if not follow and p.is_symlink():
                 continue
             rp = _safe_rel(root, p)
-            if gi_spec is not None and _gitignore_match(gi_spec, rp):
+            if gi_spec is not None and _gitignore_match(rp=rp, spec=gi_spec):  # type: ignore
                 continue
-            if excludes and any(fnmatch.fnmatch(rp, pat) for pat in excludes):
+            if excludes and _path_matches_patterns(rp, excludes):
                 continue
-            if includes and not any(fnmatch.fnmatch(rp, pat) for pat in includes):
+            if includes and not _path_matches_patterns(rp, includes):
                 continue
             matches.append(p)
         except Exception:

@@ -8,8 +8,8 @@ defaults:
 scripts:
   cat_file:
     cmd: "cat"
-    args: []              # no args; read from stdin
-    stdin: "file"         # feed each matched file to stdin
+    args: []
+    stdin: "file"
     expects: "file"
 
 targets:
@@ -18,18 +18,14 @@ targets:
     path: "./build"
     recursive: true
     filter:
-      gitignore_paths: []         # or add ~/.gitignore if you want
-      include_globs: ["**/*"]     # or ["**/*.txt"] to restrict
-      exclude_globs:
-        - "**/.git/**"
+      include_globs: ["*","**/*"]   # include top-level files AND recursive
+      exclude_globs: ["**/.git/**"]
     execution:
-      mode: "per-file"            # run once per matched file
-      order: "stable"             # deterministic order
-      parallelism: 6              # optional per-target override
+      mode: "per-file"
+      order: "stable"
     scripts:
       - use: "cat_file"
 
 output:
   format: "ndjson"
   include_fields: ["target", "file", "stdout", "exit_code"]
-  merge_streams: false
