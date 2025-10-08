@@ -1,0 +1,17 @@
+version: 1
+defaults: { recursive: false, parallelism: 2 }
+scripts:
+  echo_name:
+    cmd: "bash"
+    args: ["-lc", "echo NAME={name} PATH={path} FILE={file}"]
+    stdin: null
+    expects: "file"
+targets:
+  - name: "tin-file"
+    type: "file"
+    path: "./build/test.txt"
+    scripts:
+      - use: "echo_name"
+output:
+  format: "ndjson"
+  include_fields: ["target", "script", "file", "stdout", "exit_code"]
