@@ -38,6 +38,7 @@ import yaml as _yaml
 from html import escape as _escape
 from html.parser import HTMLParser
 from urllib import parse as _urlparse
+from mistune.util import strip_end as _strip_end
 
 __all__ = ["TransomSite", "TransomCommand"]
 
@@ -902,6 +903,19 @@ _heading_id_regex_1 = _re.compile(r"[^a-zA-Z0-9_ ]+")
 _heading_id_regex_2 = _re.compile(r"[_ ]")
 
 class HtmlRenderer(_mistune.renderers.html.HTMLRenderer):
+    def __init__(self, escape=True, allow_harmful_protocols=None):
+        super().__init__(escape=escape, allow_harmful_protocols=allow_harmful_protocols)
+        self._tab_group_counter = 0
+
+    def reset_tab_counters(self):
+        self._tab_group_counter = 0
+
+    def render_token(self, token, state):
+        if token["type"] == "tab_group":
+            return self._render_tab_group(token, state)
+
+        return super().render_token(token, state)
+
     def heading(self, text, level, **attrs):
         id = _heading_id_regex_1.sub("", text)
         id = _heading_id_regex_2.sub("-", id)
@@ -909,16 +923,207 @@ class HtmlRenderer(_mistune.renderers.html.HTMLRenderer):
 
         return f"<h{level} id=\"{id}\">{text}</h{level}>\n"
 
+    def _render_tab_group(self, token, state):
+        items = token.get("children", [])
+
+        if not items:
+            return ""
+
+        self._tab_group_counter += 1
+        group_index = self._tab_group_counter
+        selected_index = 0
+
+        for idx, item in enumerate(items):
+            options = (item.get("attrs") or {}).get("options") or {}
+
+            if options.get("select"):
+                selected_index = idx
+                break
+
+        parts = list()
+
+        parts.append(f'<div class="tabbed-set" data-tabs="{group_index}:0">')
+
+        tab_name = f"__tabbed_{group_index}"
+
+        for idx, item in enumerate(items, start=1):
+            attrs = item.get("attrs") or {}
+            title = attrs.get("title") or f"Tab {idx}"
+            options = attrs.get("options") or {}
+            input_id = f"{tab_name}_{idx}"
+            checked_attr = ' checked="checked"' if (idx - 1) == selected_index else ""
+
+            parts.append(f'<input type="radio" name="{tab_name}" id="{input_id}"{checked_attr}>')
+            parts.append(f'<label for="{input_id}">{_escape(str(title), quote=True)}</label>')
+
+            content_attrs = {"class": "tabbed-content"}
+
+            extra_attrs = options.get("attrs")
+
+            if isinstance(extra_attrs, dict):
+                extra_class = extra_attrs.get("class") or extra_attrs.get("class_")
+
+                if extra_class:
+                    content_attrs["class"] += f" {extra_class}"
+
+                for name, value in extra_attrs.items():
+                    if name in ("class", "class_"):
+                        continue
+
+                    content_attrs[name] = value
+
+            content_html = self.render_tokens(item.get("children", []), state)
+            parts.append(f'<div{"".join(html_attrs(content_attrs))}>{content_html}</div>')
+
+        parts.append("</div>\n")
+
+        return "".join(parts)
+
+_TAB_BLOCK_START_PATTERN = r"^(?P<tab_indent>[ \t]*)(?P<tab_marker>/{2,})\s*tab\b(?P<tab_header>[^\n]*)$"
+_TAB_BLOCK_CLOSE_RE = _re.compile(r"^/{2,}\s*$")
+
+def _strip_markdown_comments(text):
+    return "".join(line for line in text.splitlines(keepends=True) if not line.startswith(";;"))
+
+def _tab_to_bool(value):
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+
+        if normalized in ("true", "yes", "on", "1"):
+            return True
+
+        if normalized in ("false", "no", "off", "0"):
+            return False
+
+    return bool(value)
+
+def _tab_extract_title(header):
+    header = (header or "").strip()
+
+    if header.startswith("|"):
+        return header[1:].strip()
+
+    return header
+
+def _parse_tab_block(block, m, state):
+    indent = m.group("tab_indent") or ""
+    header = m.group("tab_header") or ""
+    src = state.src
+    end = state.cursor_max
+    cursor = m.end()
+
+    meta_lines = list()
+    body_lines = list()
+    reading_meta = True
+    end_pos = cursor
+
+    while cursor < end:
+        newline_pos = src.find("\n", cursor)
+
+        if newline_pos == -1:
+            line = src[cursor:end]
+            line_with_newline = line
+            next_pos = end
+        else:
+            line = src[cursor:newline_pos]
+            line_with_newline = src[cursor:newline_pos + 1]
+            next_pos = newline_pos + 1
+
+        stripped = line[len(indent):] if line.startswith(indent) else line.lstrip()
+
+        if _TAB_BLOCK_CLOSE_RE.match(stripped):
+            end_pos = next_pos
+            cursor = end_pos
+            break
+
+        if reading_meta and line.startswith(indent + "    ") and ":" in stripped:
+            meta_lines.append(line[len(indent):])
+        else:
+            reading_meta = False
+            if line_with_newline.startswith(indent):
+                body_lines.append(line_with_newline[len(indent):])
+            else:
+                body_lines.append(line_with_newline)
+
+        cursor = next_pos
+
+    meta_text = "\n".join(meta_lines).strip()
+
+    if meta_text:
+        try:
+            options = _yaml.safe_load(meta_text) or dict()
+        except Exception:
+            options = dict()
+    else:
+        options = dict()
+
+    if not isinstance(options, dict):
+        options = dict()
+
+    options = dict(options)
+
+    new_group = _tab_to_bool(options.pop("new", False))
+    options["select"] = _tab_to_bool(options.get("select", False))
+
+    attrs_value = options.get("attrs")
+
+    if not isinstance(attrs_value, dict):
+        options.pop("attrs", None)
+
+    body_text = _strip_end(_strip_markdown_comments("".join(body_lines)))
+
+    child_state = block.state_cls(state)
+    child_state.process(body_text)
+    block.parse(child_state)
+
+    tab_token = {
+        "type": "tab_item",
+        "children": child_state.tokens,
+        "attrs": {
+            "title": _tab_extract_title(header),
+            "options": options,
+        },
+    }
+
+    last_token = state.last_token()
+
+    if not new_group and last_token and last_token.get("type") == "tab_group":
+        group_token = last_token
+    else:
+        group_token = {"type": "tab_group", "children": []}
+        state.append_token(group_token)
+
+    group_token["children"].append(tab_token)
+
+    return end_pos
+
+def tab_block_plugin(md):
+    md.block.register("tab_block", _TAB_BLOCK_START_PATTERN, _parse_tab_block, before="paragraph")
+    md.block.insert_rule(md.block.list_rules, "tab_block", before="paragraph")
+    md.block.insert_rule(md.block.block_quote_rules, "tab_block", before="paragraph")
+
 class MarkdownLocal(_threading.local):
     def __init__(self):
-        self.value = _mistune.create_markdown(renderer=HtmlRenderer(escape=False), plugins=["table", "strikethrough"])
+        self.value = _mistune.create_markdown(
+            renderer=HtmlRenderer(escape=False),
+            plugins=["table", "strikethrough", tab_block_plugin],
+        )
         self.value.block.list_rules += ['table', 'nptable']
 
 _markdown_local = MarkdownLocal()
 
 def convert_markdown(text):
-    lines = (x for x in text.splitlines(keepends=True) if not x.startswith(";;"))
-    return _markdown_local.value("".join(lines))
+    text = _strip_markdown_comments(text)
+
+    renderer = getattr(_markdown_local.value, "renderer", None)
+
+    if renderer and hasattr(renderer, "reset_tab_counters"):
+        renderer.reset_tab_counters()
+
+    return _markdown_local.value(text)
 
 _lipsum_words = [
     "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "vestibulum", "enim", "urna",

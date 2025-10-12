@@ -32,6 +32,24 @@ To link sites, you create a token on the Kubernetes site and redeem that token o
    skupper site update --enable-link-access
    ```
 2. Create a token:
+   
+   // tab | Tab A title
+   ```bash
+   skupper token issue <filename>
+   ```
+   where `<filename>` is the name of a YAML file that is saved on your local filesystem.
+   ///
+   
+   /// tab | Tab B title
+   Not supported.
+   ///
+   
+   /// tab | Tab C Title
+       new: true
+   
+   Will be part of a separate, new tab group.
+   ///
+   
    ```bash
    skupper token issue <filename>
    ```
