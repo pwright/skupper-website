@@ -22,7 +22,7 @@ conventional applications across multiple sites.
 
 A minimal multi-service HTTP application deployed across sites using Skupper
 
-<a href="https://github.com/skupperproject/skupper-example-hello-world/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-hello-world"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -32,7 +32,7 @@ A minimal multi-service HTTP application deployed across sites using Skupper
 
 A database-backed web application deployed across sites using Skupper
 
-<a href="https://github.com/skupperproject/skupper-example-patient-portal/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-patient-portal"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -42,7 +42,7 @@ A database-backed web application deployed across sites using Skupper
 
 Deploy the gRPC-based Online Boutique application across sites using Skupper
 
-<a href="https://github.com/skupperproject/skupper-example-grpc/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-grpc"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -69,7 +69,7 @@ NAT without changing your existing networking.
 Connect from the cloud to services running on-prem
 
 
-<a href="https://github.com/skupperproject/skupper-example-public-to-private/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-public-to-private"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -87,7 +87,7 @@ Connect from the cloud to services running on-prem
 Connect services in isolated on-prem sites
 
 
-<a href="https://github.com/skupperproject/skupper-example-private-to-private/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-private-to-private"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -105,7 +105,7 @@ Connect services in isolated on-prem sites
 Connect services separated by firewalls and a DMZ
 
 
-<a href="https://github.com/skupperproject/skupper-example-dmz/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-dmz"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -126,7 +126,7 @@ containers, or as ordinary processes on bare metal hosts or VMs.
 Connect services running as pods in Kubernetes
 
 
-<a href="https://github.com/skupperproject/skupper-example-hello-world/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-hello-world"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -137,7 +137,7 @@ Connect services running as pods in Kubernetes
 Connect services running as containers
 
 
-<a href="https://github.com/skupperproject/skupper-example-podman/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-podman"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -159,7 +159,7 @@ Skupper web console helps you observe your application network.
 Hello World deployed across sites using the Skupper CLI
 
 
-<a href="https://github.com/skupperproject/skupper-example-hello-world/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-hello-world"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -169,7 +169,7 @@ Hello World deployed across sites using the Skupper CLI
 
 Hello World deployed across sites using Skupper YAML
 
-<a href="https://github.com/skupperproject/skupper-example-yaml/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-yaml"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -189,7 +189,7 @@ large organizations.
 
 Use Skupper Ansible to automate network deployment
 
-<a href="https://github.com/skupperproject/skupper-example-ansible/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-ansible"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -209,7 +209,7 @@ be, while accessing it from wherever your services are running.
 
 Deploy a MongoDB replica set across sites using Skupper
 
-<a href="https://github.com/skupperproject/skupper-example-mongodb-replica-set/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-mongodb-replica-set"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -219,7 +219,7 @@ Deploy a MongoDB replica set across sites using Skupper
 
 Access a PostgreSQL database in a private data center from the public cloud
 
-<a href="https://github.com/skupperproject/skupper-example-postgresql/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-postgresql"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -239,7 +239,7 @@ applications spread across isolated network locations.
 
 Access a Kafka cluster using Skupper
 
-<a href="https://github.com/skupperproject/skupper-example-kafka/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-kafka"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -260,7 +260,7 @@ protocols.
 
 Access an FTP server using Skupper
 
-<a href="https://github.com/skupperproject/skupper-example-ftp/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-ftp"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 
@@ -276,7 +276,7 @@ Access an FTP server using Skupper
 
 Gather Prometheus metrics from endpoints deployed across multiple clusters
 
-<a href="https://github.com/skupperproject/skupper-example-prometheus/tree/v2"><span class="fab fa-github fa-lg"></span> Example</a>
+<a href="https://github.com/skupperproject/skupper-example-prometheus"><span class="fab fa-github fa-lg"></span> Example</a>
 
 </section>
 

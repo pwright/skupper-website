@@ -30,6 +30,7 @@ For more options, see the [installation guide][install-docs].
 
 <div style="column-count: 3;">
 
+* [2.1.2](https://github.com/skupperproject/skupper/releases/tag/2.1.2) - 13 October 2025
 * [2.1.1](https://github.com/skupperproject/skupper/releases/tag/2.1.1) - 13 August 2025
 * [2.1.0](https://github.com/skupperproject/skupper/releases/tag/2.1.0) - 22 July 2025
 * [2.0.1](https://github.com/skupperproject/skupper/releases/tag/2.0.1) - 21 May 2025
