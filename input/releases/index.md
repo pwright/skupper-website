@@ -30,6 +30,7 @@ For more options, see the [installation guide][install-docs].
 
 <div style="column-count: 3;">
 
+* [2.2.1](https://github.com/skupperproject/skupper/releases/tag/2.2.1) - 3 June 2026
 * [2.2.0](https://github.com/skupperproject/skupper/releases/tag/2.2.0) - 11 May 2026
 * [2.1.4](https://github.com/skupperproject/skupper/releases/tag/2.1.4) - 23 April 2026
 * [2.1.3](https://github.com/skupperproject/skupper/releases/tag/2.1.3) - 12 December 2025
@@ -38,6 +39,7 @@ For more options, see the [installation guide][install-docs].
 * [2.1.0](https://github.com/skupperproject/skupper/releases/tag/2.1.0) - 22 July 2025
 * [2.0.1](https://github.com/skupperproject/skupper/releases/tag/2.0.1) - 21 May 2025
 * [2.0.0](https://github.com/skupperproject/skupper/releases/tag/2.0.0) - 7 March 2025
+* [1.9.6](https://github.com/skupperproject/skupper/releases/tag/1.9.6) - 18 June 2026
 * [1.9.5](https://github.com/skupperproject/skupper/releases/tag/1.9.5) - 13 March 2026
 * [1.9.4](https://github.com/skupperproject/skupper/releases/tag/1.9.4) - 6 August 2025
 * [1.9.3](https://github.com/skupperproject/skupper/releases/tag/1.9.3) - 31 July 2025
